@@ -1,6 +1,7 @@
-
 const int buzzerPin = 8;
 const int ledPin = 9;
+const unsigned long alertDuration = 3000; // 3 секунды
+const unsigned long blinkInterval = 250;  // 250 мс
 
 void setup() {
   Serial.begin(9600);
@@ -11,15 +12,18 @@ void setup() {
 void loop() {
   if (Serial.available() > 0) {
     char incoming = Serial.read();
+
     if (incoming == '1') {
       unsigned long startTime = millis();
-      while (millis() - startTime < 3000) {
+
+      while (millis() - startTime < alertDuration) {
         digitalWrite(buzzerPin, HIGH);
         digitalWrite(ledPin, HIGH);
-        delay(250);
+        delay(blinkInterval);
+
         digitalWrite(buzzerPin, LOW);
         digitalWrite(ledPin, LOW);
-        delay(250);
+        delay(blinkInterval);
       }
     }
   }
