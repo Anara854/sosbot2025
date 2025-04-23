@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SOS-Бот — Жест помощи</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    video { width: 300px; border: 2px solid #ccc; border-radius: 10px; }
+    #status, #serialStatus { font-size: 1.2em; margin-top: 10px; }
+    button { padding: 10px 20px; font-size: 1em; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>SOS-Бот — Помощь рядом</h1>
+  
+  <!-- Здесь будет видео с веб-камеры -->
+  <div id="webcam"></div>
+  <div id="status">Ожидание модели...</div>
+  <button onclick="connectToArduino()">🔌 Подключиться к Arduino</button>
+  <div id="serialStatus">Статус порта: не подключено</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <script>
+    const URL = "./";
+    let model, webcam, maxPredictions;
+    let port;
+
+    // Инициализация камеры
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const videoElement = document.createElement('video');
+        videoElement.srcObject = stream;
+        document.getElementById('webcam').appendChild(videoElement);
+        videoElement.play();
+
+        // Инициализация модели после того как камера начала работать
+        await init();
+      } catch (err) {
+        console.error('Ошибка при доступе к камере: ', err);
+        alert('Не удалось получить доступ к камере.');
+      }
+    }
+
+    async function init() {
+      // Загружаем модель и метаданные
+      const modelURL = URL + "model.json";
+      const metadataURL = URL + "metadata.json";
+
+      model = await tmImage.load(modelURL, metadataURL);
+      maxPredictions = model.getTotalClasses();
+
+      // Настроим веб-камеру для Teachable Machine
+      webcam = new tmImage.Webcam(300, 300, true); // Камера будет 300x300 пикселей
+      await webcam.setup();
+      await webcam.play();
+      window.requestAnimationFrame(loop);
+
+      // Вставляем канвас веб-камеры в тег video
+      document.getElementById("webcam").appendChild(webcam.canvas);
+    }
+
+    async function connectToArduino() {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        document.getElementById("serialStatus").textContent = "✅ Порт подключен";
+      } catch (err) {
+        document.getElementById("serialStatus").textContent = "❌ Ошибка подключения";
+        console.error("Ошибка при подключении:", err);
+      }
+    }
+
+    async function loop() {
+      webcam.update();  // Обновляем изображение с камеры
+      await predict();  // Делаем предсказание
+      window.requestAnimationFrame(loop);  // Повторяем цикл
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      let resultText = "Распознавание...";
+      let found = false;
+
+      // Проверяем, если был распознан жест помощи
+      prediction.forEach(p => {
+        if (p.probability > 0.95 && p.className === "Жест помощи") {
+          resultText = "🚨 Обнаружен жест помощи!";
+          found = true;
+        }
+      });
+
+      // Отображаем результат
+      document.getElementById("status").textContent = resultText;
+
+      // Если жест найден и подключено устройство, отправляем данные на Arduino
+      if (found && port && port.writable) {
+        const writer = port.writable.getWriter();
+        const data = new TextEncoder().encode("1");  // Отправляем "1" на Arduino
+        await writer.write(data);
+        writer.releaseLock();
+      }
+    }
+
+    // Инициализация камеры и модели
+    setupCamera();
+  </script>
+</body>
+</html>
